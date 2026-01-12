@@ -157,19 +157,51 @@ $res_flash = $conn->query($query_flash);
 
             <?php if($res_new->num_rows > 0): ?>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <?php while($row = $res_new->fetch_assoc()): ?>
+                <?php while($row = $res_new->fetch_assoc()): 
+                // LOGIKA HARGA
+                $showMemberPrice = $isLoggedIn && !empty($row['member_price']) && $row['member_price'] < $row['price'];
+                $finalPrice = $showMemberPrice ? $row['member_price'] : $row['price'];
+                $hargaCoret = 0;
+                if ($row['original_price'] > $row['price']) {
+                    $hargaCoret = $row['original_price'];
+                } elseif ($showMemberPrice) {
+                    $hargaCoret = $row['price'];
+                }
+                $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
+                
+                // DATA JSON MODAL
+                $priceDisplay = number_format($finalPrice, 0, ',', '.');
+                $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
+                $productData = htmlspecialchars(json_encode([
+                    'id' => $row['id'],
+                    'title' => $row['title'],
+                    'price' => $priceDisplay, 
+                    'rawPrice' => $finalPrice, 
+                    'original' => $originalDisplay,
+                    'img' => $row['image'], 
+                    'desc' => $row['description'],
+                    'stock' => $row['stock'],
+                    'isFlash' => $row['is_flash_sale'],
+                    'isMember' => $showMemberPrice,
+                    'rawOriginal' => $hargaCoret
+                ]), ENT_QUOTES, 'UTF-8');
+                ?>
+
                 <div class="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
                     <div class="aspect-[4/5] bg-gray-100 overflow-hidden relative">
                         <img src="<?= htmlspecialchars($row['image']) ?>" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                         
                         <?php if($row['is_flash_sale']): ?>
-                        <div class="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide shadow-md animate-pulse">Flash Sale</div>
+                            <div class="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide shadow-md animate-pulse">Flash Sale</div>
+                        <?php endif; ?>
+                        <?php if($diskonPersen > 0): ?>
+                            <div class="absolute top-3 <?= $row['is_flash_sale'] ? 'right-3' : 'left-3' ?> bg-black text-white text-[9px] font-bold px-2 py-1 rounded shadow-md">-<?= $diskonPersen ?>%</div>
                         <?php endif; ?>
 
                         <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition duration-300">
-                            <a href="detail_produk.php?id=<?= $row['id'] ?>" class="bg-white text-black w-10 h-10 rounded-full flex items-center justify-center hover:bg-black hover:text-white shadow-lg transition" title="Lihat Detail">
+                            <button onclick='openModal(<?= $productData ?>)' class="bg-white text-black w-10 h-10 rounded-full flex items-center justify-center hover:bg-black hover:text-white shadow-lg transition" title="Lihat Detail">
                                 <i class="fa fa-eye"></i>
-                            </a>
+                            </button>
                             <button onclick="addToCart(<?= $row['id'] ?>)" class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
                                 <i class="fa fa-shopping-cart"></i>
                             </button>
@@ -178,7 +210,12 @@ $res_flash = $conn->query($query_flash);
                     <div class="p-5">
                         <p class="text-[10px] text-gray-400 font-bold uppercase mb-1 tracking-wider"><?= htmlspecialchars($row['category']) ?></p>
                         <h3 class="font-bold text-gray-900 truncate text-sm mb-2 group-hover:text-amber-600 transition"><?= htmlspecialchars($row['title']) ?></h3>
-                        <p class="text-lg font-black text-gray-900">Rp <?= number_format($row['price'],0,',','.') ?></p>
+                        <div class="flex items-center gap-2">
+                            <?php if($hargaCoret > 0): ?>
+                                <p class="text-xs text-gray-400 line-through">Rp <?= number_format($hargaCoret,0,',','.') ?></p>
+                            <?php endif; ?>
+                            <p class="text-lg font-black <?= $diskonPersen > 0 ? 'text-red-600' : 'text-gray-900' ?>">Rp <?= number_format($finalPrice,0,',','.') ?></p>
+                        </div>
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -187,7 +224,6 @@ $res_flash = $conn->query($query_flash);
             <div class="mt-8 text-center md:hidden">
                 <a href="katalog.php" class="inline-block bg-black text-white px-8 py-3 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-amber-500 hover:text-black transition">Lihat Semua</a>
             </div>
-
             <?php else: ?>
                 <div class="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                     <p class="text-gray-400 text-sm font-bold uppercase">Belum ada produk baru.</p>
@@ -210,31 +246,64 @@ $res_flash = $conn->query($query_flash);
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <?php while($item = $res_flash->fetch_assoc()): ?>
-                <div class="bg-neutral-900 rounded-2xl overflow-hidden border border-neutral-800 hover:border-amber-500/50 transition duration-300 group">
-                    <div class="aspect-square bg-neutral-800 overflow-hidden relative">
-                        <img src="<?= htmlspecialchars($item['image']) ?>" class="w-full h-full object-cover group-hover:scale-110 transition duration-500 opacity-90 group-hover:opacity-100">
-                        
-                        <?php if($item['original_price'] > $item['price']): ?>
-                        <div class="absolute top-3 right-3 bg-amber-500 text-black text-[10px] font-black px-2 py-1 rounded">
-                            -<?= round((($item['original_price'] - $item['price']) / $item['original_price']) * 100) ?>%
-                        </div>
-                        <?php endif; ?>
-                    </div>
+                <?php while($row = $res_flash->fetch_assoc()): 
+                // LOGIKA HARGA FLASH SALE
+                $showMemberPrice = $isLoggedIn && !empty($row['member_price']) && $row['member_price'] < $row['price'];
+                $finalPrice = $showMemberPrice ? $row['member_price'] : $row['price'];
+                $hargaCoret = 0;
+                if ($row['original_price'] > $row['price']) {
+                    $hargaCoret = $row['original_price'];
+                } elseif ($showMemberPrice) {
+                    $hargaCoret = $row['price'];
+                }
+                $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
+                
+                // DATA JSON MODAL
+                $priceDisplay = number_format($finalPrice, 0, ',', '.');
+                $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
+                $productData = htmlspecialchars(json_encode([
+                    'id' => $row['id'],
+                    'title' => $row['title'],
+                    'price' => $priceDisplay, 
+                    'rawPrice' => $finalPrice, 
+                    'original' => $originalDisplay,
+                    'img' => $row['image'], 
+                    'desc' => $row['description'],
+                    'stock' => $row['stock'],
+                    'isFlash' => $row['is_flash_sale'],
+                    'isMember' => $showMemberPrice,
+                    'rawOriginal' => $hargaCoret
+                ]), ENT_QUOTES, 'UTF-8');
+                ?>
 
+                <div class="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                    <div class="aspect-[4/5] bg-gray-100 overflow-hidden relative">
+                        <img src="<?= htmlspecialchars($row['image']) ?>" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        <?php if($row['is_flash_sale']): ?>
+                            <div class="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide shadow-md animate-pulse">Flash Sale</div>
+                        <?php endif; ?>
+                        <?php if($diskonPersen > 0): ?>
+                            <div class="absolute top-3 <?= $row['is_flash_sale'] ? 'right-3' : 'left-3' ?> bg-black text-white text-[9px] font-bold px-2 py-1 rounded shadow-md">-<?= $diskonPersen ?>%</div>
+                        <?php endif; ?>
+
+                        <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition duration-300">
+                            <button onclick='openModal(<?= $productData ?>)' class="bg-white text-black w-10 h-10 rounded-full flex items-center justify-center hover:bg-black hover:text-white shadow-lg transition" title="Lihat Detail">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button onclick="addToCart(<?= $row['id'] ?>)" class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
+                                <i class="fa fa-shopping-cart"></i>
+                            </button>
+                        </div>
+                    </div>
                     <div class="p-5">
-                        <h3 class="font-bold text-white truncate text-sm mb-2"><?= htmlspecialchars($item['title']) ?></h3>
-                        <div class="flex items-center gap-2 mb-3">
-                            <?php if($item['original_price'] > $item['price']): ?>
-                                <p class="text-xs text-gray-500 line-through">Rp <?= number_format($item['original_price']/1000,0) ?>k</p>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase mb-1 tracking-wider"><?= htmlspecialchars($row['category']) ?></p>
+                        <h3 class="font-bold text-gray-900 truncate text-sm mb-2 group-hover:text-amber-600 transition"><?= htmlspecialchars($row['title']) ?></h3>
+                        <div class="flex items-center gap-2">
+                            <?php if($hargaCoret > 0): ?>
+                                <p class="text-xs text-gray-400 line-through">Rp <?= number_format($hargaCoret,0,',','.') ?></p>
                             <?php endif; ?>
-                            <p class="text-amber-500 font-black text-lg">Rp <?= number_format($item['price'],0,',','.') ?></p>
+                            <p class="text-lg font-black <?= $diskonPersen > 0 ? 'text-red-600' : 'text-gray-900' ?>">Rp <?= number_format($finalPrice,0,',','.') ?></p>
                         </div>
-                        
-                        <div class="w-full bg-neutral-800 rounded-full h-1.5 mb-2 overflow-hidden">
-                            <div class="bg-gradient-to-r from-red-500 to-amber-500 h-1.5 rounded-full" style="width: <?= rand(60, 90) ?>%"></div>
-                        </div>
-                        <p class="text-[10px] text-gray-400 text-right">Segera Habis!</p>
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -248,29 +317,127 @@ $res_flash = $conn->query($query_flash);
             <img src="assets/img/SpiritGuide.jpg" class="w-20 h-20 rounded-full mx-auto mb-6 border border-gray-200 p-1 object-cover">
             <h2 class="text-3xl font-black text-gray-900 uppercase tracking-tighter mb-6">Tentang Spirit Guide</h2>
             <p class="text-gray-500 leading-relaxed text-sm md:text-base mb-10">
-                Spirit Guide lebih dari sekadar toko online. Kami adalah kurator gaya hidup yang menghadirkan produk berkualitas tinggi dengan sentuhan personal. Dari fashion yang <span class="font-bold text-black">trendsetter</span> hingga kuliner yang <span class="font-bold text-black">autentik</span>, semua ada di sini untuk melengkapi hari-harimu.
+                Spirit Guide lebih dari sekadar toko online...
             </p>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="p-6 bg-gray-50 rounded-xl">
-                    <i class="fa fa-gem text-2xl text-amber-500 mb-3"></i>
-                    <h3 class="font-bold text-sm uppercase mb-1">Kualitas Premium</h3>
-                    <p class="text-xs text-gray-400">Produk original pilihan.</p>
-                </div>
-                <div class="p-6 bg-gray-50 rounded-xl">
-                    <i class="fa fa-shipping-fast text-2xl text-amber-500 mb-3"></i>
-                    <h3 class="font-bold text-sm uppercase mb-1">Pengiriman Cepat</h3>
-                    <p class="text-xs text-gray-400">Sampai tepat waktu.</p>
-                </div>
-                <div class="p-6 bg-gray-50 rounded-xl">
-                    <i class="fa fa-headset text-2xl text-amber-500 mb-3"></i>
-                    <h3 class="font-bold text-sm uppercase mb-1">Layanan 24/7</h3>
-                    <p class="text-xs text-gray-400">Selalu siap membantu.</p>
-                </div>
+                <div class="p-6 bg-gray-50 rounded-xl"><i class="fa fa-gem text-2xl text-amber-500 mb-3"></i><h3 class="font-bold text-sm uppercase mb-1">Kualitas Premium</h3></div>
+                <div class="p-6 bg-gray-50 rounded-xl"><i class="fa fa-shipping-fast text-2xl text-amber-500 mb-3"></i><h3 class="font-bold text-sm uppercase mb-1">Pengiriman Cepat</h3></div>
+                <div class="p-6 bg-gray-50 rounded-xl"><i class="fa fa-headset text-2xl text-amber-500 mb-3"></i><h3 class="font-bold text-sm uppercase mb-1">Layanan 24/7</h3></div>
             </div>
         </div>
     </section>
 
     <?php include 'partials/footer.php'; ?>
 
+    <div id="productModal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-[999] p-3 backdrop-blur-sm transition-all opacity-0 pointer-events-none">
+        <div class="bg-white w-full max-w-5xl h-[85vh] md:h-auto md:max-h-[90vh] overflow-hidden relative shadow-2xl rounded-2xl md:rounded-3xl flex flex-col md:flex-row transform scale-95 transition-all duration-300" id="modalContent">
+            
+            <button onclick="closeModal()" class="absolute top-3 right-3 z-30 w-8 h-8 md:w-10 md:h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-gray-500 hover:bg-black hover:text-white transition shadow-sm border border-gray-100">
+                <i class="fa fa-times text-sm"></i>
+            </button>
+
+            <div class="w-full h-48 md:h-auto md:w-1/2 bg-gray-50 flex items-center justify-center p-4 relative shrink-0">
+                <img id="modalImg" class="h-full w-auto max-w-full object-contain drop-shadow-xl mix-blend-multiply">
+            </div>
+            
+            <div class="w-full md:w-1/2 flex flex-col bg-white flex-1 overflow-hidden">
+                <div class="p-6 md:p-10 overflow-y-auto custom-scrollbar flex flex-col flex-1">
+                    <nav class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 mb-3">
+                        <span>Spirit Guide</span><span class="w-1 h-1 bg-gray-300 rounded-full"></span><span>Details</span>
+                    </nav>
+                    
+                    <h3 id="modalTitle" class="text-xl md:text-4xl font-black uppercase tracking-tighter text-gray-900 leading-none mb-4"></h3>
+                    
+                    <div class="p-4 bg-gray-50 rounded-xl mb-6 border border-gray-100">
+                        <div class="flex items-center gap-2 mb-2" id="modalBadges"></div>
+                        <div class="flex items-baseline gap-2 flex-wrap">
+                            <p id="modalPrice" class="text-2xl md:text-3xl font-black text-gray-900"></p>
+                            <p id="modalOriginalPrice" class="text-sm text-gray-400 line-through font-bold decoration-2"></p>
+                        </div>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-gray-600">Stok: <span id="statusStock" class="text-green-600"></span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-500 leading-relaxed mb-8"><p id="modalDesc"></p></div>
+                    <div class="border-t border-gray-100 pt-6 mb-4"><p class="text-xs text-gray-400 italic">Lihat detail lengkap di menu Katalog.</p></div>
+                </div>
+
+                <div class="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <button id="modalAddToCartBtn" type="button" onclick="buyFromModal()" class="flex-1 py-3 rounded-xl border-2 border-gray-200 font-bold text-[10px] md:text-xs uppercase tracking-widest hover:border-black hover:bg-black hover:text-white transition-all">Add to Cart</button>
+                    <button onclick="window.location.href='checkout.php'" class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold text-[10px] md:text-xs uppercase tracking-widest hover:bg-amber-400 hover:shadow-lg transition-all">Checkout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>window.USER_ID = "<?= isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : 'guest' ?>";</script>
+    <script src="assets/js/cart.js"></script> 
+    <script src="assets/js/katalog.js"></script> 
+
+    <script>
+        // 1. Variabel Global
+        var activeModalProduct = null;
+
+        // 2. Fungsi Buka Modal
+        window.openModal = function(data) {
+            activeModalProduct = data; // Simpan data
+
+            document.getElementById('modalImg').src = data.img;
+            document.getElementById('modalTitle').innerText = data.title;
+            document.getElementById('modalPrice').innerText = "Rp " + data.price;
+            document.getElementById('modalDesc').innerText = data.desc;
+            
+            // Harga Coret
+            const elOriginal = document.getElementById('modalOriginalPrice');
+            if(data.original && data.original !== '0' && data.original !== '') {
+                elOriginal.innerText = "Rp " + data.original;
+                elOriginal.style.display = 'block';
+            } else { elOriginal.style.display = 'none'; }
+
+            // Stok
+            const elStock = document.getElementById('statusStock');
+            if(data.stock > 0) {
+                elStock.innerHTML = "READY STOCK <span class='text-green-600 font-bold'>(" + data.stock + ")</span>";
+            } else { elStock.innerHTML = "<span class='text-red-600 font-bold'>HABIS</span>"; }
+
+            // Animasi
+            const modal = document.getElementById('productModal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('modalContent').classList.remove('scale-95');
+                document.getElementById('modalContent').classList.add('scale-100');
+            }, 10);
+        }
+
+        // 3. Fungsi Beli dari Modal (Dipanggil oleh tombol onclick="buyFromModal()")
+        window.buyFromModal = function() {
+            if (activeModalProduct && typeof window.addToCart === "function") {
+                window.addToCart({
+                    id: activeModalProduct.id,
+                    title: activeModalProduct.title,
+                    price: activeModalProduct.rawPrice,
+                    originalPrice: activeModalProduct.rawOriginal,
+                    img: activeModalProduct.img
+                });
+            } else {
+                console.error("Data produk/fungsi cart error.");
+            }
+        }
+
+        window.closeModal = function() {
+            const modal = document.getElementById('productModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('modalContent').classList.remove('scale-100');
+            document.getElementById('modalContent').classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); }, 300);
+        }
+
+        document.getElementById('productModal').onclick = function(e) {
+            if (e.target === this) closeModal();
+        }
+    </script>
 </body>
 </html>

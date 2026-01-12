@@ -1,15 +1,13 @@
 <?php
 session_start();
-// PATH CONFIG SUDAH BENAR (karena file ini di root)
+// PATH CONFIG SUDAH BENAR
 require "config/db.php";
 
 $isLoggedIn = isset($_SESSION['user']);
 $category = $_GET['category'] ?? null;
-// Tambahkan kategori "Semua" atau default handling
 $allowed  = ["Fashion", "Food", "Aksesoris", "Other"];
 
 if (!in_array($category, $allowed)) {
-  // Redirect ke home atau tampilkan pesan lebih proper
   echo "<script>alert('Kategori tidak ditemukan!'); window.location='index.php';</script>";
   exit;
 }
@@ -75,7 +73,7 @@ $result = $stmt->get_result();
                 $finalPrice = $showMemberPrice ? $p['member_price'] : $p['price'];
                 $hargaCoret = 0;
                 
-                // Logic Coret: Kalau ada harga asli > harga jual, ATAU kalau member dapet diskon
+                // Logic Coret
                 if ($p['original_price'] > $p['price']) $hargaCoret = $p['original_price'];
                 elseif ($showMemberPrice) $hargaCoret = $p['price'];
 
@@ -83,15 +81,14 @@ $result = $stmt->get_result();
                 $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
                 $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
                 
-                // DATA JSON UNTUK MODAL (Biar gak ribet parsing parameter function)
-                // Kita encode data produk ke JSON biar aman dipanggil JS
+                // DATA JSON UNTUK MODAL
                 $productData = htmlspecialchars(json_encode([
                     'id' => $p['id'],
                     'title' => $p['title'],
-                    'price' => $priceDisplay, // String
-                    'rawPrice' => $finalPrice, // Angka
+                    'price' => $priceDisplay, 
+                    'rawPrice' => $finalPrice, 
                     'original' => $originalDisplay,
-                    'img' => $p['image'], // Pastikan di DB formatnya 'assets/uploads/products/...'
+                    'img' => $p['image'], 
                     'desc' => $p['description'],
                     'stock' => $p['stock'],
                     'isFlash' => $p['is_flash_sale'],
@@ -213,7 +210,7 @@ $result = $stmt->get_result();
             </div>
 
             <div class="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <button id="modalAddToCartBtn" class="flex-1 py-3 rounded-xl border-2 border-gray-200 font-bold text-[10px] md:text-xs uppercase tracking-widest hover:border-black hover:bg-black hover:text-white transition-all">Add to Cart</button>
+                <button id="modalAddToCartBtn" type="button" onclick="buyFromModal()" class="flex-1 py-3 rounded-xl border-2 border-gray-200 font-bold text-[10px] md:text-xs uppercase tracking-widest hover:border-black hover:bg-black hover:text-white transition-all">Add to Cart</button>
                 <button onclick="window.location.href='checkout.php'" class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold text-[10px] md:text-xs uppercase tracking-widest hover:bg-amber-400 hover:shadow-lg transition-all">Checkout</button>
             </div>
         </div>
@@ -224,5 +221,83 @@ $result = $stmt->get_result();
 
 <script>window.USER_ID = "<?= isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : 'guest' ?>";</script>
 <script src="assets/js/cart.js"></script> 
-<script src="assets/js/katalog.js"></script> </body>
+<script src="assets/js/katalog.js"></script> 
+
+<script>
+    // 1. Variabel Global untuk menyimpan data produk yang sedang dibuka
+    var activeModalProduct = null;
+
+    // 2. Fungsi yang dipanggil saat tombol mata diklik
+    window.openModal = function(data) {
+        // Simpan data ke variabel global
+        activeModalProduct = data;
+
+        // --- ISI DATA KE TAMPILAN MODAL ---
+        document.getElementById('modalImg').src = data.img;
+        document.getElementById('modalTitle').innerText = data.title;
+        document.getElementById('modalPrice').innerText = "Rp " + data.price;
+        document.getElementById('modalDesc').innerText = data.desc;
+        
+        // Update Form Review
+        const reviewInput = document.getElementById('review_product_id');
+        if(reviewInput) reviewInput.value = data.id;
+
+        // Tampilkan Harga Coret
+        const elOriginal = document.getElementById('modalOriginalPrice');
+        if(data.original && data.original !== '0' && data.original !== '') {
+            elOriginal.innerText = "Rp " + data.original;
+            elOriginal.style.display = 'block';
+        } else {
+            elOriginal.style.display = 'none';
+        }
+
+        // Tampilkan Status Stok
+        const elStock = document.getElementById('statusStock');
+        if(data.stock > 0) {
+            elStock.innerHTML = "READY STOCK <span class='text-green-600 font-bold'>(" + data.stock + ")</span>";
+        } else {
+            elStock.innerHTML = "<span class='text-red-600 font-bold'>HABIS</span>";
+        }
+
+        // --- BUKA MODAL ---
+        const modal = document.getElementById('productModal');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('modalContent').classList.remove('scale-95');
+            document.getElementById('modalContent').classList.add('scale-100');
+        }, 10);
+    }
+
+    // 3. Fungsi yang dipanggil saat tombol "Add to Cart" di dalam modal diklik
+    // Fungsi ini mengambil data dari variabel global (activeModalProduct)
+    window.buyFromModal = function() {
+        if (activeModalProduct && typeof window.addToCart === "function") {
+            window.addToCart({
+                id: activeModalProduct.id,
+                title: activeModalProduct.title,
+                price: activeModalProduct.rawPrice, // Pakai harga angka asli
+                originalPrice: activeModalProduct.rawOriginal,
+                img: activeModalProduct.img
+            });
+        } else {
+            console.error("Data produk tidak ditemukan atau fungsi cart error.");
+        }
+    }
+
+    // Fungsi Tutup Modal
+    window.closeModal = function() {
+        const modal = document.getElementById('productModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        document.getElementById('modalContent').classList.remove('scale-100');
+        document.getElementById('modalContent').classList.add('scale-95');
+        setTimeout(() => { modal.classList.add('hidden'); }, 300);
+    }
+
+    // Tutup jika klik area gelap
+    document.getElementById('productModal').onclick = function(e) {
+        if (e.target === this) closeModal();
+    }
+</script>
+</body>
 </html>
