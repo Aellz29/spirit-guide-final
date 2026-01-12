@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================
+   CUSTOM CSS LO PINDAHIN KE SINI
+   ========================================= */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* ANIMASI PEMBAYARAN */
+  @keyframes payment-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-payment {
+    width: max-content;
+    animation: payment-scroll 22s linear infinite;
+  }
+
+  .animate-payment:hover {
+    animation-play-state: paused;
+  }
+
+  /* NAVBAR LINKS */
+  .nav-link {
+    position: relative;
+    padding: 6px 0;
+    color: #374151; /* gray-700 */
+    transition: color 0.25s ease;
+  }
+
+  .nav-link:hover {
+    color: #ca8a04; /* yellow-600 */
+  }
+
+  /* UNDERLINE ANIMATION */
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    width: 0;
+    height: 2px;
+    background-color: #ca8a04;
+    transition: width 0.25s ease;
+  }
+
+  .nav-link:hover::after {
+    width: 100%;
+  }
+
+  .nav-link.active {
+    color: #ca8a04;
+    font-weight: 600;
+  }
+
+  .nav-link.active::after {
+    width: 100%;
+  }
+
+  /* MOBILE NAV */
+  @media (max-width: 768px) {
+    .nav-link {
+      padding: 10px 0;
+    }
+    .nav-link::after {
+      display: none;
+    }
+    .nav-link.active {
+      background-color: #fef3c7; /* yellow-100 */
+      border-radius: 8px;
+    }
+  }
+
+  /* PASSWORD FIELD WRAPPER */
+  .password-wrapper {
+    position: relative;
+  }
+
+  .password-wrapper .input-field {
+    padding-right: 45px;
+  }
+
+  .check-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #22c55e;
+    font-size: 20px;
+    display: none;
+    pointer-events: none;
+  }
+}
