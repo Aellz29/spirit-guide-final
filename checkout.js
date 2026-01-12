@@ -99,26 +99,36 @@ function loadCheckout() {
     // Looping barang
     cart.forEach((item) => {
         let price = parseFloat(item.price);
-        let originalPrice = parseFloat(item.originalPrice) || 0; // Ambil harga asli
+        let originalPrice = parseFloat(item.originalPrice) || 0;
         let totalItemPrice = price * item.qty;
         
-        // --- LOGIKA TAMPILAN HARGA CORET ---
+        // --- LOGIKA TAMPILAN HARGA & HEMAT ---
         let displayHarga = '';
 
-        // Jika harga asli LEBIH BESAR dari harga jual, berarti DISKON
+        // Jika harga asli > harga jual (Diskon)
         if (originalPrice > price) {
+            // Hitung total hemat untuk item ini (selisih x jumlah barang)
+            let hematAmount = (originalPrice - price) * item.qty;
+
             displayHarga = `
                 <div class="flex flex-col mt-1">
                     <span class="text-[10px] text-gray-400 line-through decoration-red-400 mb-0.5">
                         Rp ${originalPrice.toLocaleString('id-ID')}
                     </span>
-                    <span class="text-[10px] font-bold text-gray-900">
+                    
+                    <span class="text-[11px] font-bold text-gray-900 mb-1">
                         ${item.qty} x Rp ${price.toLocaleString('id-ID')}
                     </span>
+
+                    <div>
+                        <span class="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-green-200 inline-flex items-center gap-1">
+                            <i class="fa fa-tag text-[8px]"></i> Hemat Rp ${hematAmount.toLocaleString('id-ID')}
+                        </span>
+                    </div>
                 </div>
             `;
         } else {
-            // Tampilan Normal (Tidak Diskon)
+            // Tampilan Normal
             displayHarga = `
                 <p class="text-[10px] text-gray-500 mt-1">
                     ${item.qty} x Rp ${price.toLocaleString('id-ID')}
