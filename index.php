@@ -202,7 +202,13 @@ $res_flash = $conn->query($query_flash);
                             <button onclick='openModal(<?= $productData ?>)' class="bg-white text-black w-10 h-10 rounded-full flex items-center justify-center hover:bg-black hover:text-white shadow-lg transition" title="Lihat Detail">
                                 <i class="fa fa-eye"></i>
                             </button>
-                            <button onclick="addToCart(<?= $row['id'] ?>)" class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
+                            <button onclick='window.addToCart({
+                                id: "<?= $row["id"] ?>",
+                                title: "<?= addslashes($row["title"]) ?>",
+                                price: <?= $finalPrice ?>,
+                                originalPrice: <?= $hargaCoret ?>,
+                                img: "<?= $row["image"] ?>"
+                            })' class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
                                 <i class="fa fa-shopping-cart"></i>
                             </button>
                         </div>
@@ -290,7 +296,13 @@ $res_flash = $conn->query($query_flash);
                             <button onclick='openModal(<?= $productData ?>)' class="bg-white text-black w-10 h-10 rounded-full flex items-center justify-center hover:bg-black hover:text-white shadow-lg transition" title="Lihat Detail">
                                 <i class="fa fa-eye"></i>
                             </button>
-                            <button onclick="addToCart(<?= $row['id'] ?>)" class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
+                            <button onclick='window.addToCart({
+                                id: "<?= $row["id"] ?>",
+                                title: "<?= addslashes($row["title"]) ?>",
+                                price: <?= $finalPrice ?>,
+                                originalPrice: <?= $hargaCoret ?>,
+                                img: "<?= $row["image"] ?>"
+                            })' class="bg-amber-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-amber-600 shadow-lg transition" title="Tambah ke Keranjang">
                                 <i class="fa fa-shopping-cart"></i>
                             </button>
                         </div>
@@ -418,10 +430,12 @@ $res_flash = $conn->query($query_flash);
                 window.addToCart({
                     id: activeModalProduct.id,
                     title: activeModalProduct.title,
-                    price: activeModalProduct.rawPrice,
+                    price: activeModalProduct.rawPrice, // PENTING: Gunakan rawPrice untuk kalkulasi
                     originalPrice: activeModalProduct.rawOriginal,
                     img: activeModalProduct.img
                 });
+                // Opsional: menutup modal setelah add to cart
+                // closeModal();
             } else {
                 console.error("Data produk/fungsi cart error.");
             }
