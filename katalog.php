@@ -1,34 +1,54 @@
 <?php
 session_start();
-// PATH CONFIG SUDAH BENAR (karena file ini di root)
+// PATH CONFIG
 require "config/db.php";
 
 $isLoggedIn = isset($_SESSION['user']);
 $category = $_GET['category'] ?? null;
-// Tambahkan kategori "Semua" atau default handling
+// Ambil kata kunci search jika ada
+$search = $_GET['search'] ?? '';
+
 $allowed  = ["Fashion", "Food", "Aksesoris", "Other"];
 
 if (!in_array($category, $allowed)) {
-  // Redirect ke home atau tampilkan pesan lebih proper
   echo "<script>alert('Kategori tidak ditemukan!'); window.location='index.php';</script>";
   exit;
 }
 
-// LOGIKA MODIFIKASI:
-// Jika user klik 'Other', tampilkan SEMUA produk (All items).
-// Jika user klik kategori lain (Fashion/Food/dll), tampilkan sesuai kategori saja.
+// --- LOGIKA QUERY SEARCH & KATEGORI ---
 
-if ($category === 'Other') {
-    // Query tanpa "WHERE category = ..." agar semua produk muncul
-    $stmt = $conn->prepare("SELECT * FROM products ORDER BY is_flash_sale DESC, id DESC");
-    $stmt->execute();
-} else {
-    // Query standar untuk kategori spesifik
-    $stmt = $conn->prepare("SELECT * FROM products WHERE category = ? ORDER BY is_flash_sale DESC, id DESC");
-    $stmt->bind_param("s", $category);
-    $stmt->execute();
+// Siapkan variabel untuk binding parameter
+$types = "";
+$params = [];
+
+// Base Query
+$sql = "SELECT * FROM products WHERE 1=1";
+
+// 1. Filter Kategori (Kecuali 'Other' yang menampilkan semua)
+if ($category !== 'Other') {
+    $sql .= " AND category = ?";
+    $types .= "s";
+    $params[] = $category;
 }
 
+// 2. Filter Search (Jika user mengetik sesuatu)
+if (!empty($search)) {
+    $sql .= " AND title LIKE ?";
+    $types .= "s";
+    $params[] = "%" . $search . "%"; // Pakai wildcard % agar pencarian fleksibel
+}
+
+// 3. Order (Flash sale dulu, baru produk terbaru)
+$sql .= " ORDER BY is_flash_sale DESC, id DESC";
+
+// Eksekusi Query dengan Prepared Statement
+$stmt = $conn->prepare($sql);
+
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+
+$stmt->execute();
 $result = $stmt->get_result();
 ?>
 
@@ -75,11 +95,29 @@ $result = $stmt->get_result();
             </div>
 
             <div class="w-full md:w-80 mt-8 md:mt-0 relative group">
-                <input type="text" id="productSearch" placeholder="CARI KOLEKSI..." 
-                    class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
-                <i class="fa fa-search absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition"></i>
+                <form action="" method="GET" class="w-full relative">
+                    <input type="hidden" name="category" value="<?= htmlspecialchars($category) ?>">
+                    
+                    <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="CARI KOLEKSI..." 
+                        class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
+                    
+                    <button type="submit" class="absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition hover:text-amber-600 bg-transparent border-none cursor-pointer">
+                        <i class="fa fa-search"></i>
+                    </button>
+                </form>
             </div>
         </div>
+
+        <?php if($result->num_rows === 0): ?>
+            <div class="text-center py-20 fade-in">
+                <div class="text-6xl text-gray-200 mb-4"><i class="fa fa-box-open"></i></div>
+                <h2 class="text-2xl font-bold text-gray-400 uppercase">Produk tidak ditemukan</h2>
+                <?php if(!empty($search)): ?>
+                    <p class="text-gray-400 mt-2">Pencarian "<?= htmlspecialchars($search) ?>" tidak ada hasil.</p>
+                    <a href="?category=<?= $category ?>" class="inline-block mt-4 text-xs font-bold uppercase tracking-widest text-amber-600 border-b-2 border-amber-600 pb-1 hover:text-black transition">Reset Pencarian</a>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
 
         <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 fade-in" style="animation-delay: 0.2s;">
             <?php while($p = $result->fetch_assoc()): 
@@ -87,7 +125,6 @@ $result = $stmt->get_result();
                 $finalPrice = $showMemberPrice ? $p['member_price'] : $p['price'];
                 $hargaCoret = 0;
                 
-                // Logic Coret: Kalau ada harga asli > harga jual, ATAU kalau member dapet diskon
                 if ($p['original_price'] > $p['price']) $hargaCoret = $p['original_price'];
                 elseif ($showMemberPrice) $hargaCoret = $p['price'];
 
@@ -95,15 +132,13 @@ $result = $stmt->get_result();
                 $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
                 $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
                 
-                // DATA JSON UNTUK MODAL (Biar gak ribet parsing parameter function)
-                // Kita encode data produk ke JSON biar aman dipanggil JS
                 $productData = htmlspecialchars(json_encode([
                     'id' => $p['id'],
                     'title' => $p['title'],
-                    'price' => $priceDisplay, // String
-                    'rawPrice' => $finalPrice, // Angka
+                    'price' => $priceDisplay,
+                    'rawPrice' => $finalPrice, 
                     'original' => $originalDisplay,
-                    'img' => $p['image'], // Pastikan di DB formatnya 'assets/uploads/products/...'
+                    'img' => $p['image'], 
                     'desc' => $p['description'],
                     'stock' => $p['stock'],
                     'isFlash' => $p['is_flash_sale'],
@@ -160,6 +195,8 @@ $result = $stmt->get_result();
             </div>
             <?php endwhile; ?>
         </div>
+        <?php endif; ?>
+
     </section>
 </main>
 
