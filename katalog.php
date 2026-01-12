@@ -1,10 +1,13 @@
 <?php
 session_start();
-// PATH CONFIG SUDAH BENAR
+// PATH CONFIG
 require "config/db.php";
 
 $isLoggedIn = isset($_SESSION['user']);
 $category = $_GET['category'] ?? null;
+// Ambil kata kunci pencarian (jika ada)
+$search = $_GET['search'] ?? ''; 
+
 $allowed  = ["Fashion", "Food", "Aksesoris", "Other"];
 
 if (!in_array($category, $allowed)) {
@@ -12,8 +15,18 @@ if (!in_array($category, $allowed)) {
   exit;
 }
 
-$stmt = $conn->prepare("SELECT * FROM products WHERE category = ? ORDER BY is_flash_sale DESC, id DESC");
-$stmt->bind_param("s", $category);
+// LOGIC SEARCH DIPERBAIKI DISINI
+if (!empty($search)) {
+    // Jika ada pencarian, cari berdasarkan Kategori DAN Judul Produk
+    $stmt = $conn->prepare("SELECT * FROM products WHERE category = ? AND title LIKE ? ORDER BY is_flash_sale DESC, id DESC");
+    $searchTerm = "%" . $search . "%";
+    $stmt->bind_param("ss", $category, $searchTerm);
+} else {
+    // Jika tidak ada pencarian, tampilkan semua di kategori tersebut
+    $stmt = $conn->prepare("SELECT * FROM products WHERE category = ? ORDER BY is_flash_sale DESC, id DESC");
+    $stmt->bind_param("s", $category);
+}
+
 $stmt->execute();
 $result = $stmt->get_result();
 ?>
@@ -61,11 +74,29 @@ $result = $stmt->get_result();
             </div>
 
             <div class="w-full md:w-80 mt-8 md:mt-0 relative group">
-                <input type="text" id="productSearch" placeholder="CARI KOLEKSI..." 
-                    class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
-                <i class="fa fa-search absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition"></i>
+                <form action="" method="GET" class="w-full relative">
+                    <input type="hidden" name="category" value="<?= htmlspecialchars($category) ?>">
+                    
+                    <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="CARI KOLEKSI..." 
+                        class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
+                    
+                    <button type="submit" class="absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition hover:text-amber-600 bg-transparent border-none cursor-pointer">
+                        <i class="fa fa-search"></i>
+                    </button>
+                </form>
             </div>
         </div>
+        
+        <?php if($result->num_rows === 0): ?>
+            <div class="text-center py-20 fade-in">
+                <div class="text-6xl text-gray-200 mb-4"><i class="fa fa-search"></i></div>
+                <h2 class="text-2xl font-bold text-gray-400 uppercase">Produk tidak ditemukan</h2>
+                <p class="text-gray-400 mt-2">Coba kata kunci lain atau reset pencarian.</p>
+                <?php if(!empty($search)): ?>
+                    <a href="?category=<?= $category ?>" class="inline-block mt-4 text-xs font-bold uppercase tracking-widest text-amber-600 border-b-2 border-amber-600 pb-1 hover:text-black hover:border-black transition">Reset Pencarian</a>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
 
         <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 fade-in" style="animation-delay: 0.2s;">
             <?php while($p = $result->fetch_assoc()): 
@@ -73,7 +104,6 @@ $result = $stmt->get_result();
                 $finalPrice = $showMemberPrice ? $p['member_price'] : $p['price'];
                 $hargaCoret = 0;
                 
-                // Logic Coret
                 if ($p['original_price'] > $p['price']) $hargaCoret = $p['original_price'];
                 elseif ($showMemberPrice) $hargaCoret = $p['price'];
 
@@ -81,11 +111,10 @@ $result = $stmt->get_result();
                 $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
                 $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
                 
-                // DATA JSON UNTUK MODAL
                 $productData = htmlspecialchars(json_encode([
                     'id' => $p['id'],
                     'title' => $p['title'],
-                    'price' => $priceDisplay, 
+                    'price' => $priceDisplay,
                     'rawPrice' => $finalPrice, 
                     'original' => $originalDisplay,
                     'img' => $p['image'], 
@@ -145,6 +174,8 @@ $result = $stmt->get_result();
             </div>
             <?php endwhile; ?>
         </div>
+        <?php endif; ?>
+
     </section>
 </main>
 
@@ -210,7 +241,7 @@ $result = $stmt->get_result();
             </div>
 
             <div class="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <button id="modalAddToCartBtn" type="button" onclick="buyFromModal()" class="flex-1 py-3 rounded-xl border-2 border-gray-200 font-bold text-[10px] md:text-xs uppercase tracking-widest hover:border-black hover:bg-black hover:text-white transition-all">Add to Cart</button>
+                <button id="modalAddToCartBtn" class="flex-1 py-3 rounded-xl border-2 border-gray-200 font-bold text-[10px] md:text-xs uppercase tracking-widest hover:border-black hover:bg-black hover:text-white transition-all">Add to Cart</button>
                 <button onclick="window.location.href='checkout.php'" class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold text-[10px] md:text-xs uppercase tracking-widest hover:bg-amber-400 hover:shadow-lg transition-all">Checkout</button>
             </div>
         </div>
@@ -221,83 +252,5 @@ $result = $stmt->get_result();
 
 <script>window.USER_ID = "<?= isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : 'guest' ?>";</script>
 <script src="assets/js/cart.js"></script> 
-<script src="assets/js/katalog.js"></script> 
-
-<script>
-    // 1. Variabel Global untuk menyimpan data produk yang sedang dibuka
-    var activeModalProduct = null;
-
-    // 2. Fungsi yang dipanggil saat tombol mata diklik
-    window.openModal = function(data) {
-        // Simpan data ke variabel global
-        activeModalProduct = data;
-
-        // --- ISI DATA KE TAMPILAN MODAL ---
-        document.getElementById('modalImg').src = data.img;
-        document.getElementById('modalTitle').innerText = data.title;
-        document.getElementById('modalPrice').innerText = "Rp " + data.price;
-        document.getElementById('modalDesc').innerText = data.desc;
-        
-        // Update Form Review
-        const reviewInput = document.getElementById('review_product_id');
-        if(reviewInput) reviewInput.value = data.id;
-
-        // Tampilkan Harga Coret
-        const elOriginal = document.getElementById('modalOriginalPrice');
-        if(data.original && data.original !== '0' && data.original !== '') {
-            elOriginal.innerText = "Rp " + data.original;
-            elOriginal.style.display = 'block';
-        } else {
-            elOriginal.style.display = 'none';
-        }
-
-        // Tampilkan Status Stok
-        const elStock = document.getElementById('statusStock');
-        if(data.stock > 0) {
-            elStock.innerHTML = "READY STOCK <span class='text-green-600 font-bold'>(" + data.stock + ")</span>";
-        } else {
-            elStock.innerHTML = "<span class='text-red-600 font-bold'>HABIS</span>";
-        }
-
-        // --- BUKA MODAL ---
-        const modal = document.getElementById('productModal');
-        modal.classList.remove('hidden');
-        setTimeout(() => {
-            modal.classList.remove('opacity-0', 'pointer-events-none');
-            document.getElementById('modalContent').classList.remove('scale-95');
-            document.getElementById('modalContent').classList.add('scale-100');
-        }, 10);
-    }
-
-    // 3. Fungsi yang dipanggil saat tombol "Add to Cart" di dalam modal diklik
-    // Fungsi ini mengambil data dari variabel global (activeModalProduct)
-    window.buyFromModal = function() {
-        if (activeModalProduct && typeof window.addToCart === "function") {
-            window.addToCart({
-                id: activeModalProduct.id,
-                title: activeModalProduct.title,
-                price: activeModalProduct.rawPrice, // Pakai harga angka asli
-                originalPrice: activeModalProduct.rawOriginal,
-                img: activeModalProduct.img
-            });
-        } else {
-            console.error("Data produk tidak ditemukan atau fungsi cart error.");
-        }
-    }
-
-    // Fungsi Tutup Modal
-    window.closeModal = function() {
-        const modal = document.getElementById('productModal');
-        modal.classList.add('opacity-0', 'pointer-events-none');
-        document.getElementById('modalContent').classList.remove('scale-100');
-        document.getElementById('modalContent').classList.add('scale-95');
-        setTimeout(() => { modal.classList.add('hidden'); }, 300);
-    }
-
-    // Tutup jika klik area gelap
-    document.getElementById('productModal').onclick = function(e) {
-        if (e.target === this) closeModal();
-    }
-</script>
-</body>
+<script src="assets/js/katalog.js"></script> </body>
 </html>
