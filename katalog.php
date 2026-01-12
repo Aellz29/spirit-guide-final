@@ -1,33 +1,34 @@
 <?php
 session_start();
-// PATH CONFIG
+// PATH CONFIG SUDAH BENAR (karena file ini di root)
 require "config/db.php";
 
 $isLoggedIn = isset($_SESSION['user']);
 $category = $_GET['category'] ?? null;
-// Ambil kata kunci pencarian (jika ada)
-$search = $_GET['search'] ?? ''; 
-
+// Tambahkan kategori "Semua" atau default handling
 $allowed  = ["Fashion", "Food", "Aksesoris", "Other"];
 
 if (!in_array($category, $allowed)) {
+  // Redirect ke home atau tampilkan pesan lebih proper
   echo "<script>alert('Kategori tidak ditemukan!'); window.location='index.php';</script>";
   exit;
 }
 
-// LOGIC SEARCH DIPERBAIKI DISINI
-if (!empty($search)) {
-    // Jika ada pencarian, cari berdasarkan Kategori DAN Judul Produk
-    $stmt = $conn->prepare("SELECT * FROM products WHERE category = ? AND title LIKE ? ORDER BY is_flash_sale DESC, id DESC");
-    $searchTerm = "%" . $search . "%";
-    $stmt->bind_param("ss", $category, $searchTerm);
+// LOGIKA MODIFIKASI:
+// Jika user klik 'Other', tampilkan SEMUA produk (All items).
+// Jika user klik kategori lain (Fashion/Food/dll), tampilkan sesuai kategori saja.
+
+if ($category === 'Other') {
+    // Query tanpa "WHERE category = ..." agar semua produk muncul
+    $stmt = $conn->prepare("SELECT * FROM products ORDER BY is_flash_sale DESC, id DESC");
+    $stmt->execute();
 } else {
-    // Jika tidak ada pencarian, tampilkan semua di kategori tersebut
+    // Query standar untuk kategori spesifik
     $stmt = $conn->prepare("SELECT * FROM products WHERE category = ? ORDER BY is_flash_sale DESC, id DESC");
     $stmt->bind_param("s", $category);
+    $stmt->execute();
 }
 
-$stmt->execute();
 $result = $stmt->get_result();
 ?>
 
@@ -74,29 +75,11 @@ $result = $stmt->get_result();
             </div>
 
             <div class="w-full md:w-80 mt-8 md:mt-0 relative group">
-                <form action="" method="GET" class="w-full relative">
-                    <input type="hidden" name="category" value="<?= htmlspecialchars($category) ?>">
-                    
-                    <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="CARI KOLEKSI..." 
-                        class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
-                    
-                    <button type="submit" class="absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition hover:text-amber-600 bg-transparent border-none cursor-pointer">
-                        <i class="fa fa-search"></i>
-                    </button>
-                </form>
+                <input type="text" id="productSearch" placeholder="CARI KOLEKSI..." 
+                    class="w-full bg-white border border-gray-200 rounded-full py-3 px-6 pl-12 text-xs font-bold tracking-widest uppercase focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all shadow-sm group-hover:shadow-md">
+                <i class="fa fa-search absolute left-5 top-3.5 text-gray-400 group-focus-within:text-amber-500 transition"></i>
             </div>
         </div>
-        
-        <?php if($result->num_rows === 0): ?>
-            <div class="text-center py-20 fade-in">
-                <div class="text-6xl text-gray-200 mb-4"><i class="fa fa-search"></i></div>
-                <h2 class="text-2xl font-bold text-gray-400 uppercase">Produk tidak ditemukan</h2>
-                <p class="text-gray-400 mt-2">Coba kata kunci lain atau reset pencarian.</p>
-                <?php if(!empty($search)): ?>
-                    <a href="?category=<?= $category ?>" class="inline-block mt-4 text-xs font-bold uppercase tracking-widest text-amber-600 border-b-2 border-amber-600 pb-1 hover:text-black hover:border-black transition">Reset Pencarian</a>
-                <?php endif; ?>
-            </div>
-        <?php else: ?>
 
         <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 fade-in" style="animation-delay: 0.2s;">
             <?php while($p = $result->fetch_assoc()): 
@@ -104,6 +87,7 @@ $result = $stmt->get_result();
                 $finalPrice = $showMemberPrice ? $p['member_price'] : $p['price'];
                 $hargaCoret = 0;
                 
+                // Logic Coret: Kalau ada harga asli > harga jual, ATAU kalau member dapet diskon
                 if ($p['original_price'] > $p['price']) $hargaCoret = $p['original_price'];
                 elseif ($showMemberPrice) $hargaCoret = $p['price'];
 
@@ -111,13 +95,15 @@ $result = $stmt->get_result();
                 $originalDisplay = ($hargaCoret > 0) ? number_format($hargaCoret, 0, ',', '.') : '';
                 $diskonPersen = ($hargaCoret > 0) ? round((($hargaCoret - $finalPrice) / $hargaCoret) * 100) : 0;
                 
+                // DATA JSON UNTUK MODAL (Biar gak ribet parsing parameter function)
+                // Kita encode data produk ke JSON biar aman dipanggil JS
                 $productData = htmlspecialchars(json_encode([
                     'id' => $p['id'],
                     'title' => $p['title'],
-                    'price' => $priceDisplay,
-                    'rawPrice' => $finalPrice, 
+                    'price' => $priceDisplay, // String
+                    'rawPrice' => $finalPrice, // Angka
                     'original' => $originalDisplay,
-                    'img' => $p['image'], 
+                    'img' => $p['image'], // Pastikan di DB formatnya 'assets/uploads/products/...'
                     'desc' => $p['description'],
                     'stock' => $p['stock'],
                     'isFlash' => $p['is_flash_sale'],
@@ -174,8 +160,6 @@ $result = $stmt->get_result();
             </div>
             <?php endwhile; ?>
         </div>
-        <?php endif; ?>
-
     </section>
 </main>
 
